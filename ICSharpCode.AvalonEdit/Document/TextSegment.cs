@@ -75,11 +75,21 @@ namespace ICSharpCode.AvalonEdit.Document
 		internal int segmentLength;
 
 		/// <summary>
+		/// internal counter
+		/// </summary>
+		internal int changeDefermentCounter;
+
+		/// <summary>
 		/// distanceToMaxEnd = Max(segmentLength,
 		///                        left.distanceToMaxEnd + left.Offset - Offset,
 		///                        left.distanceToMaxEnd + right.Offset - Offset)
 		/// </summary>
 		internal int distanceToMaxEnd;
+
+		/// <summary>
+		/// internal flag for deferred change notifications
+		/// </summary>
+		internal bool hadDeferedChange;
 
 		int ISegment.Offset {
 			get { return StartOffset; }
@@ -135,7 +145,7 @@ namespace ICSharpCode.AvalonEdit.Document
 					} else {
 						nodeLength = value;
 					}
-					OnSegmentChanged();
+					PossiblyDeferredOnSegmentChanged();
 				}
 			}
 		}
@@ -175,9 +185,45 @@ namespace ICSharpCode.AvalonEdit.Document
 					segmentLength = value;
 					if (ownerTree != null)
 						ownerTree.UpdateAugmentedData(this);
-					OnSegmentChanged();
+					PossiblyDeferredOnSegmentChanged();
 				}
 			}
+		}
+
+		/// <summary>
+		/// <para>Starts a batch of segment changes.</para>
+		/// <para>Invocations of <see cref="OnSegmentChanged"/> are suspended until EndUpdate is called.</para>
+		/// <para>Calling StartUpdate several times increments a counter, only after the appropriate number
+		/// of EndUpdate calls the invocations is resumed.</para>
+		/// </summary>
+		public void StartUpdate() {
+			changeDefermentCounter++;
+        }
+
+		/// <summary>
+		/// Ends a batch of segment changes.
+		/// </summary>
+		/// <remarks>If one (or more) invocation(s) to <see cref="OnSegmentChanged"/> should have happened during
+		/// the batch, a <em>single</em> OnSegmentChanged invocation will happen at the batch end.</remarks>
+		public void EndUpdate() {
+			if ( 0 == (changeDefermentCounter = Math.Max(0, changeDefermentCounter - 1))) {
+				if (hadDeferedChange) {
+					hadDeferedChange = false;
+					OnSegmentChanged();
+                }
+            }
+        }
+
+		/// <summary>
+		/// This method gets called when the StartOffset/Length/EndOffset properties are set.
+		/// It is not called when StartOffset/Length/EndOffset change due to document changes
+		/// </summary>
+		/// <remarks>It may be deferred with calls to <see cref="StartUpdate"/>/<see cref="EndUpdate"/></remarks>
+		private void PossiblyDeferredOnSegmentChanged() {
+			if (changeDefermentCounter == 0)
+				OnSegmentChanged();
+			else
+				hadDeferedChange = true;
 		}
 
 		/// <summary>

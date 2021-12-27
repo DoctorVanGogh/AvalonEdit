@@ -197,10 +197,12 @@ namespace ICSharpCode.AvalonEdit.Document
 					// Replacement starting in front of text segment and running into segment.
 					// Keep segment.EndOffset constant and move segment.StartOffset to the end of the replacement
 					int remainingLength = segment.EndOffset - (offset + change.RemovalLength);
+					segment.StartUpdate();
 					RemoveSegment(segment);
 					segment.StartOffset = offset + change.RemovalLength;
 					segment.Length = Math.Max(0, remainingLength);
 					AddSegment(segment);
+					segment.EndUpdate();
 				}
 			}
 			// move start offsets of all segments > offset
