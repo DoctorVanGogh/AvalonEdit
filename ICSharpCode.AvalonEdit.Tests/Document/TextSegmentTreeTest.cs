@@ -47,7 +47,28 @@ namespace ICSharpCode.AvalonEdit.Document
 				this.Length = expectedLength;
 			}
 		}
-		
+
+		class ChangeTrackingTestTextSegment : TestTextSegment
+		{
+			public event EventHandler Changed;
+
+			public ChangeTrackingTestTextSegment(int expectedOffset, int expectedLength) : base(expectedOffset, expectedLength)
+			{
+			}
+
+			protected virtual void OnChanged()
+			{
+				Changed?.Invoke(this, EventArgs.Empty);
+			}
+
+			protected override void OnSegmentChanged()
+			{
+				base.OnSegmentChanged();
+				OnChanged();
+			}
+		}
+
+
 		TextSegmentCollection<TestTextSegment> tree;
 		List<TestTextSegment> expectedSegments;
 		
@@ -125,7 +146,17 @@ namespace ICSharpCode.AvalonEdit.Document
 			Assert.AreSame(s1, tree.FindFirstSegmentWithStartAfter(5));
 			Assert.AreSame(null, tree.FindFirstSegmentWithStartAfter(6));
 		}
-		
+
+
+		ChangeTrackingTestTextSegment AddChangeTrackingSegment(int offset, int length)
+		{
+			//			Console.WriteLine("Add " + offset + ", " + length);
+			ChangeTrackingTestTextSegment s = new ChangeTrackingTestTextSegment(offset, length);
+			tree.Add(s);
+			expectedSegments.Add(s);
+			return s;
+		}
+
 		TestTextSegment AddSegment(int offset, int length)
 		{
 //			Console.WriteLine("Add " + offset + ", " + length);
@@ -228,7 +259,28 @@ namespace ICSharpCode.AvalonEdit.Document
 			ChangeDocument(new OffsetChangeMapEntry(10, 20, 30));
 			CheckSegments();
 		}
-		
+
+		[Test]
+		public void ReplacementOfWholeSegmentWithChangeTracking()
+		{
+			bool didTriggerSegmentChange = false;
+			bool availableDuringSegmentChange = false;
+
+			ChangeTrackingTestTextSegment s1 = AddChangeTrackingSegment(10, 20);
+			s1.Changed += (s, __) => {
+				ChangeTrackingTestTextSegment segment = s as ChangeTrackingTestTextSegment;
+				didTriggerSegmentChange = true;
+				availableDuringSegmentChange = tree.Contains(segment);
+			};	
+				 
+			ChangeDocument(new OffsetChangeMapEntry(9, 22, 30));
+			Assert.IsTrue(didTriggerSegmentChange, "Did not trigger OnSegmentChanged call.");
+			Assert.IsTrue(availableDuringSegmentChange, "Segment not a member of collection during change.");
+
+			CheckSegments();
+		}
+
+
 		[Test]
 		public void ReplacementAtEndOfSegment()
 		{
